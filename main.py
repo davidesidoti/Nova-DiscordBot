@@ -1,96 +1,60 @@
+# WaLLE
+import requests
+import json
 import discord
-import youtube_dl
-import spotipy
-from spotipy.oauth2 import SpotifyClientCredentials
+from discord.ext import commands
+import asyncio
+from dotenv import load_dotenv
+import os
+from cogs.Music import Music
 
-# Create a Discord client instance
-client = discord.Client()
 
-# Spotify client credentials
-spotify_client_id = 'YOUR_SPOTIFY_CLIENT_ID'
-spotify_client_secret = 'YOUR_SPOTIFY_CLIENT_SECRET'
+load_dotenv()
+# Get the API token from the .env file.
+DISCORD_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 
-# Set up Spotify authentication
-spotify_auth_manager = SpotifyClientCredentials(client_id=spotify_client_id, client_secret=spotify_client_secret)
-spotify = spotipy.Spotify(auth_manager=spotify_auth_manager)
+intents = discord.Intents().all()
+client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix='n!', intents=intents)
 
-# Store the songs in a queue
-song_queue = []
+bot.remove_command('help')
 
-# Function to play YouTube audio
-def play_youtube_audio(voice_channel, url):
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-    }
-    with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        url2 = info['formats'][0]['url']
-        voice_channel.play(discord.FFmpegPCMAudio(url2), after=lambda e: play_next_song(voice_channel))
 
-# Function to play the next song in the queue
-def play_next_song(voice_channel):
-    if len(song_queue) > 0:
-        url = song_queue.pop(0)
-        play_youtube_audio(voice_channel, url)
+@bot.command(name='help', description="sends a help message")
+async def help_(ctx):
+    """Help message"""
 
-# Function to search for a Spotify song
-def search_spotify_song(query):
-    results = spotify.search(q=query, type='track', limit=1)
-    if results['tracks']['items']:
-        track = results['tracks']['items'][0]
-        return track['external_urls']['spotify']
-    return None
+    embed = discord.Embed(
+        title="Help", description="List of available commands:", color=discord.Color.green())
 
-# Function to search for a Spotify playlist
-def search_spotify_playlist(query):
-    results = spotify.search(q=query, type='playlist', limit=1)
-    if results['playlists']['items']:
-        playlist = results['playlists']['items'][0]
-        return playlist['external_urls']['spotify']
-    return None
+    embed.add_field(
+        name="join", value="Connects to a voice channel (if no channel is passed, it will connect to the voice channel you are connected to)\n`Example: n!join`", inline=False)
+    embed.add_field(
+        name="play", value="Queue the provided song (only works with urls for now)\n`Example: n!play https://www.youtube.com/watch?v=dQw4w9WgXcQ`", inline=False)
+    embed.add_field(name="pause", value="Pauses music\n`Example: n!pause`", inline=False)
+    embed.add_field(name="resume", value="Resumes music\n`Example: n!resume`", inline=False)
+    embed.add_field(
+        name="skip", value="Skips to the next song in queue\n`Example: n!skip`", inline=False)
+    embed.add_field(
+        name="remove", value="Removes a specified song from the queue\n`Example: n!remove 1`", inline=False)
+    embed.add_field(
+        name="clear", value="Clears the entire queue\n`Example: n!clear`", inline=False)
+    embed.add_field(
+        name="queue", value="Shows the queue of upcoming songs\n`Example: n!queue`", inline=False)
+    embed.add_field(
+        name="np", value="Shows song currently playing\n`Example: n!np`", inline=False)
 
-# Event triggered when the bot is ready
-@client.event
+    await ctx.send(embed=embed)
+
+
+@bot.event
 async def on_ready():
-    print('Bot is ready.')
+    await bot.load_extension("cogs.Music")
 
-# Event triggered when a message is received
-@client.event
-async def on_message(message):
-    if message.author == client.user:
-        return
+    for guild in bot.guilds:
+        print('Active in {}\n Member Count : {}'.format(
+            guild.name, guild.member_count))
 
-    if message.content.startswith('!playyoutube'):
-        voice_channel = message.author.voice.channel
-        url = message.content.split(' ')[1]
-        song_queue.append(url)
-        if len(song_queue) == 1:
-            play_youtube_audio(voice_channel, url)
 
-    if message.content.startswith('!playspotifysong'):
-        query = message.content.split(' ', 1)[1]
-        song_url = search_spotify_song(query)
-        if song_url:
-            voice_channel = message.author.voice.channel
-            song_queue.append(song_url)
-            if len(song_queue) == 1:
-                play_youtube_audio(voice_channel, song_url)
-        else:
-            await message.channel.send('No Spotify song found.')
-
-    if message.content.startswith('!playspotifyplaylist'):
-        query = message.content.split(' ', 1)[1]
-        playlist_url = search_spotify_playlist(query)
-        if playlist_url:
-            # You can implement logic to extract the individual songs from the playlist and add them to the queue
-            await message.channel.send('Playlist playback not implemented.')
-        else:
-            await message.channel.send('No Spotify playlist found.')
-
-# Replace 'YOUR_DISCORD_BOT_TOKEN' with your actual Discord bot token
-client.run('YOUR_DISCORD_BOT_TOKEN')
+if __name__ == "__main__":
+    bot.run(DISCORD_TOKEN)
